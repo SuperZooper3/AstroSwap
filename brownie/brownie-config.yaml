@@ -7,7 +7,9 @@ compiler:
     remappings:
       - '@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.4.0'
       - '@chainlink=smartcontractkit/chainlink-brownie-contracts@1.2.0'
-
+    optimizer:
+      enabled: true
+      runs: 2000
 dotenv: .env
 
 # Information for how to deal with each network

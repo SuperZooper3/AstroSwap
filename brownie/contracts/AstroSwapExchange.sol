@@ -26,8 +26,8 @@ contract AstroSwapExchange {
     mapping (address => uint256) public investorShares;
     uint256 public totalShares;
 
-    event TokenPurchase(address indexed user, uint256 ethIn, uint256 tokensOut);
-    event EthPurchase(address indexed user, uint256 tokensIn, uint256 ethOut);
+    event TokenPurchase(address indexed user, address indexed recipient, uint256 ethIn, uint256 tokensOut);
+    event EthPurchase(address indexed user, address indexed recipient, uint256 tokensIn, uint256 ethOut);
     event Investment(address indexed user, uint256 indexed sharesPurchased);
     event Divestment(address indexed user, uint256 indexed sharesBurned);
 
@@ -69,28 +69,45 @@ contract AstroSwapExchange {
         emit Investment(msg.sender, sharesPurchased);
     }
 
-    function ethToToken(address recipient, uint256 minTokensOut) public payable hasLiquidity{
-        uint256 fee = msg.value / feeAmmount;
-        ethPool = ethPool + msg.value;
-        uint256 tokensPaid = tokenPool - (invariant / ethPool - fee); // k = x * y <==> y = k / x, we payout the difference 
-        require(tokensPaid >= minTokensOut, "Price has slipped lower than minimum"); // Ensure users are getting the price they want
+    function ethToTokenPrivate(uint256 value) private returns(uint256 tokensPaid){
+        uint256 fee = value / feeAmmount;
+        ethPool = ethPool + value;
+        uint256 tokensPaid = tokenPool - (invariant / (ethPool - fee) + 1); // k = x * y <==> y = k / x, we payout the difference
+        // The +1 in the above line is to prevent a rouding error that causes the invariant to lower on transactions where the fee rounds down to 0
         require(tokensPaid <= tokenPool, "Lacking pool tokens"); // Make sure we have enough tokens to pay out
         tokenPool = tokenPool - tokensPaid;
         invariant = tokenPool * ethPool;
-        emit TokenPurchase(msg.sender, msg.value, tokensPaid);
-        require(token.transfer(recipient, tokensPaid), "Tkn transfer fail");
+        return tokensPaid;
     }
 
-    function tokenToEth(address recipient, uint256 tokensIn, uint256 minEthOut) public hasLiquidity{
+    function tokenToEthPrivate(uint256 tokensIn) private returns(uint256 ethPaid){
         uint256 fee = tokensIn / feeAmmount;
-        token.transferFrom(msg.sender, address(this), tokensIn);
         tokenPool = tokenPool + tokensIn;
-        uint256 ethPaid = ethPool - (invariant / tokenPool - fee); // k = x * y <==> x = k / y, we payout the difference
-        require(ethPaid >= minEthOut, "Price has slipped lower than minimum"); // Ensure users are getting the price they want
+        uint256 ethPaid = ethPool - (invariant / (tokenPool - fee) + 1); // k = x * y <==> x = k / y, we payout the difference
+        // The +1 in the above line is to prevent a rouding error that causes the invariant to lower on transactions where the fee rounds down to 0
         require(ethPaid <= ethPool, "Lacking pool eth"); // Make sure we have enough eth to pay out
         ethPool = ethPool - ethPaid;
         invariant = tokenPool * ethPool;
-        emit EthPurchase(msg.sender, tokensIn, ethPaid);
+        return ethPaid;
+    }
+
+    function ethToToken(address recipient, uint256 minTokensOut) public payable hasLiquidity{
+        uint256 tokensPaid = ethToTokenPrivate(msg.value);
+        require(tokensPaid >= minTokensOut, "tknsPaid < minTknsOut");
+        emit TokenPurchase(msg.sender, recipient, msg.value, tokensPaid);
+        require(token.transfer(recipient, tokensPaid), "Tkn OUT transfer fail");
+    }
+
+    function tokenToEth(address recipient, uint256 tokensIn, uint256 minEthOut) public hasLiquidity{
+        require(token.transferFrom(msg.sender, address(this), tokensIn), "Tkn IN transfer fail");
+        uint256 ethPaid = tokenToEthPrivate(tokensIn);
+        require(ethPaid >= minEthOut, "ethPaid < minEthOut");
+        emit EthPurchase(msg.sender, recipient, tokensIn, ethPaid);
         payable(recipient).call{value:ethPaid};
     }
+
+    // function tokenToToken(address recipient, address tokenOutAddress, uint256 tokensIn, uint256 minTokensOut) public hasLiquidity{
+    //     AstroSwapExchange outputExchange = AstroSwapExchange(tokenOutAddress);
+    //     tokenToEth
+    // }
 }
