@@ -49,17 +49,17 @@ contract AstroSwapExchange {
         tokenPool = tokenInvestment;
         ethPool = msg.value;
         invariant = ethPool * tokenPool;
-        // Give the starting investor 100 shares
-        investorShares[msg.sender] = 100;
-        totalShares = 100;
-        emit Investment(msg.sender, 100);
+        // Give the starting investor 10000 shares
+        investorShares[msg.sender] = 10000;
+        totalShares = 10000;
+        emit Investment(msg.sender, 10000);
     }
 
     function invest() public payable{
         // Amount of tokens to invest is bassed of of the current ratio of eth to token in the pools
         uint256 tokenInvestment = (tokenPool / ethPool) * msg.value;
-        token.transferFrom(msg.sender, address(this), tokenInvestment);
-        uint256 sharesPurchased = (tokenInvestment / tokenPool) * totalShares;
+        require (token.transferFrom(msg.sender, address(this), tokenInvestment));
+        uint256 sharesPurchased = (tokenInvestment * totalShares)/ tokenPool;
         ethPool += msg.value;
         tokenPool += tokenInvestment;
         invariant = ethPool * tokenPool;
