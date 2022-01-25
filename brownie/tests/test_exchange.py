@@ -27,6 +27,12 @@ from random import randint
 # - Call tokenToEth with min > expected (should fail)
 # - Call tokenToEth with min < expected
 # - Try calling tokenToEth without seeding (should fail)
+# - Compare EthToTokenQuote to actual cost (3 different values)
+# - Compare TokenToEthQuote to actual cost (3 different values)
+# - Divest properly
+# - Divest half as much as what was invested
+# - Divest more than was invested
+
 
 fee = 400
 
@@ -146,7 +152,7 @@ def test_exchange_invest_properly():
     seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
     seedTx.wait(1)
     # Act
-    investTx = exchange.invest({'from': account, 'value': 1*10**18})
+    investTx = exchange.invest(10**22, {'from': account, 'value': 1*10**18})
     investTx.wait(1)
     # Assert
     assert investTx.events["Investment"]["sharesPurchased"] == 10000
@@ -171,7 +177,7 @@ def test_exchange_invest_just_eth():
     seedTx.wait(1)
     # Act & Assert
     with pytest.raises(Exception): # Fails because we only authorize transfer of tokens for the seeding
-        investTx = exchange.invest({'from': account, 'value': 1*10**18})
+        investTx = exchange.invest(10**22, {'from': account, 'value': 1*10**18})
         investTx.wait(1)
 
 def test_exchange_invest_nothing():
@@ -189,7 +195,7 @@ def test_exchange_invest_nothing():
     seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
     seedTx.wait(1)
     # Act
-    investTx = exchange.invest({'from': account, 'value': 0})
+    investTx = exchange.invest(10**22, {'from': account, 'value': 0})
     investTx.wait(1)
     # Assert
     assert investTx.events["Investment"]["sharesPurchased"] == 0
@@ -210,7 +216,7 @@ def test_exchange_invest_half():
     seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
     seedTx.wait(1)
     # Act
-    investTx = exchange.invest({'from': account, 'value': 0.5*10**18})
+    investTx = exchange.invest(10**22, {'from': account, 'value': 0.5*10**18})
     investTx.wait(1)
     # Assert
     print(investTx.events)
@@ -235,7 +241,7 @@ def test_exchange_invest_two_x():
     seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
     seedTx.wait(1)
     # Act
-    investTx = exchange.invest({'from': account, 'value': 2*10**18})
+    investTx = exchange.invest(10**22, {'from': account, 'value': 2*10**18})
     investTx.wait(1)
     # Assert
     assert investTx.events["Investment"]["sharesPurchased"] == 20000
@@ -243,6 +249,73 @@ def test_exchange_invest_two_x():
     assert exchange.tokenPool() == 300*10**18
     assert exchange.totalShares() == 30000
     assert exchange.invariant() == exchange.ethPool() * exchange.tokenPool()
+
+def test_exchange_invest_maxToken_double():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 200*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    # Act
+    investTx = exchange.invest(200*10**18, {'from': account, 'value': 1*10**18})
+    investTx.wait(1)
+    # Assert
+    assert investTx.events["Investment"]["sharesPurchased"] == 10000
+    assert exchange.ethPool() == 2*10**18
+    assert exchange.tokenPool() == 200*10**18
+    assert exchange.totalShares() == 20000
+    assert exchange.invariant() == exchange.ethPool() * exchange.tokenPool()
+
+def test_exchange_invest_maxToken_exact():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 200*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    # Act
+    investTx = exchange.invest(100*10**18, {'from': account, 'value': 1*10**18})
+    investTx.wait(1)
+    # Assert
+    assert investTx.events["Investment"]["sharesPurchased"] == 10000
+    assert exchange.ethPool() == 2*10**18
+    assert exchange.tokenPool() == 200*10**18
+    assert exchange.totalShares() == 20000
+    assert exchange.invariant() == exchange.ethPool() * exchange.tokenPool()
+
+def test_exchange_invest_maxToken_less():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 200*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    # Act & Assert
+    with pytest.raises(Exception):
+        investTx = exchange.invest(99*10**18, {'from': account, 'value': 1*10**18})
+        investTx.wait(1)
 
 def test_try_calling_privates():
     # Arrange
@@ -429,3 +502,77 @@ def test_call_tokenToEth_no_seed():
     with pytest.raises(Exception):
         tokenToEthTx = exchange.tokenToEth(account.address, 2*10**18, 0, {'from': account})
         tokenToEthTx.wait(1)
+
+def test_ethToToken_quotes():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 200*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    quote = exchange.getEthToTokenQuote(0.1*10**18)
+    # Act
+    ethToTokenTx = exchange.ethToToken(account.address, 0, {'from': account, 'value': 0.1*10**18})
+    ethToTokenTx.wait(1)
+    # Assert
+    assert abs(ethToTokenTx.events["TokenPurchase"]["tokensOut"] / quote - 1) == 0
+
+    # And again!
+    quote = exchange.getEthToTokenQuote(0.3*10**18)
+    # Act
+    ethToTokenTx = exchange.ethToToken(account.address, 0, {'from': account, 'value': 0.3*10**18})
+    ethToTokenTx.wait(1)
+    # Assert
+    assert abs(ethToTokenTx.events["TokenPurchase"]["tokensOut"] / quote - 1) == 0
+
+    # And again!
+    quote = exchange.getEthToTokenQuote(123456789)
+    # Act
+    ethToTokenTx = exchange.ethToToken(account.address, 0, {'from': account, 'value': 123456789})
+    ethToTokenTx.wait(1)
+    # Assert
+    assert abs(ethToTokenTx.events["TokenPurchase"]["tokensOut"] / quote - 1) == 0
+
+def test_tokenToEth_quotes():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 200*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    quote = exchange.getTokenToEthQuote(1*10**18)
+    # Act
+    tokenToEthTx = exchange.tokenToEth(account.address, 1*10**18, 0, {'from': account})
+    tokenToEthTx.wait(1)
+    # Assert
+    assert abs(tokenToEthTx.events["EthPurchase"]["ethOut"] / quote - 1) == 0
+
+    # And again!
+    quote = exchange.getTokenToEthQuote(6*10**18)
+    # Act
+    tokenToEthTx = exchange.tokenToEth(account.address, 6*10**18, 0, {'from': account})
+    tokenToEthTx.wait(1)
+    # Assert
+    assert abs(tokenToEthTx.events["EthPurchase"]["ethOut"] / quote - 1) == 0
+
+    # And again!
+    quote = exchange.getTokenToEthQuote(1234567)
+    # Act
+    tokenToEthTx = exchange.tokenToEth(account.address, 1234567, 0, {'from': account})
+    tokenToEthTx.wait(1)
+    # Assert
+    assert abs(tokenToEthTx.events["EthPurchase"]["ethOut"] / quote - 1) == 0
