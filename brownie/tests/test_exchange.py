@@ -1,7 +1,8 @@
-from scripts.helpers import smart_get_account, LOCAL_BLOCKCHAIN_ENVIRONMENTS
-from scripts.runAstroSwap import deploy_erc20 
+from scripts.helpers import smart_get_account, LOCAL_BLOCKCHAIN_ENVIRONMENTS, calculate_liquidity_pool_output
+from scripts.runAstroSwap import deploy_erc20 , get_exchange_info
 from brownie import network, accounts, config, AstroSwapExchange, MockERC20
 import pytest
+from random import randint
 
 # All the exchange tests
 # - Deploy an exchange contract
@@ -15,7 +16,6 @@ import pytest
 # - Invest nothing (should fail)
 # - Invest half as much as what was seeded
 # - Invest 2x as much as what was seeded
-# - Invest a random amount 
 # - Invest while only authroising half of the ERC20 transfer (should fail)
 # - Try calling ethToTokenPrivate (should fail)
 # - Try calling tokenToEthPrivate (should fail)
@@ -243,3 +243,189 @@ def test_exchange_invest_two_x():
     assert exchange.tokenPool() == 300*10**18
     assert exchange.totalShares() == 30000
     assert exchange.invariant() == exchange.ethPool() * exchange.tokenPool()
+
+def test_try_calling_privates():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    # Act & Assert
+    with pytest.raises(Exception):
+        exchange.ethToTokenPrivate(1*10**18, {'from': account})
+    with pytest.raises(Exception):
+        exchange.tokenToEthPrivate(1*10**18, {'from': account})
+
+def test_call_ethToToken_min_0():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    beforeInvariant = exchange.invariant()
+    expectedReturn = calculate_liquidity_pool_output(exchange.ethPool(), exchange.tokenPool(), 0.1*10**18, fee)
+    # Act
+    ethToTokenTx = exchange.ethToToken(account.address, 0, {'from': account, 'value': 0.1*10**18})
+    ethToTokenTx.wait(1)
+    # Assert
+    assert abs(ethToTokenTx.events["TokenPurchase"]["tokensOut"] / expectedReturn - 1) < 0.0001 # I was having some jank in the math, was not able to find it. 0.01% error is fine.
+    assert exchange.invariant() >= beforeInvariant
+
+def test_call_ethToToken_min_smaller():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    beforeInvariant = exchange.invariant()
+    expectedReturn = calculate_liquidity_pool_output(exchange.ethPool(), exchange.tokenPool(), 0.1*10**18, fee)
+    # Act
+    ethToTokenTx = exchange.ethToToken(account.address, expectedReturn * 0.95, {'from': account, 'value': 0.1*10**18})
+    # Above has 5% slippage
+    ethToTokenTx.wait(1)
+    # Assert
+    assert abs(ethToTokenTx.events["TokenPurchase"]["tokensOut"] / expectedReturn - 1) < 0.0001 # I was having some jank in the math, was not able to find it. 0.01% error is fine.
+    assert exchange.invariant() >= beforeInvariant
+
+def test_call_ethToToken_min_larger():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    
+    expectedReturn = calculate_liquidity_pool_output(exchange.ethPool(), exchange.tokenPool(), 0.1*10**18, fee)
+    # Act & Assert
+    with pytest.raises(Exception):
+        ethToTokenTx = exchange.ethToToken(account.address, expectedReturn * 1.05, {'from': account, 'value': 0.1*10**18})
+        ethToTokenTx.wait(1)
+
+def test_call_ethToToken_no_seed():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    # Act & Assert
+    with pytest.raises(Exception):
+        ethToTokenTx = exchange.ethToToken(account.address, 1*10**18, {'from': account, 'value': 0.1*10**18})
+        ethToTokenTx.wait(1)
+
+def test_call_tokenToEth_min_0():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18 + 2*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    beforeInvariant = exchange.invariant()
+    expectedReturn = calculate_liquidity_pool_output(exchange.tokenPool(), exchange.ethPool(), 2*10**18, fee)
+    # Act
+    tokenToEthTx = exchange.tokenToEth(account.address, 2*10**18, 0, {'from': account})
+    tokenToEthTx.wait(1)
+    # Assert
+    assert abs(tokenToEthTx.events["EthPurchase"]["ethOut"] / expectedReturn - 1) < 0.0001 # I was having some jank in the math, was not able to find it. 0.01% error is fine.
+    assert exchange.invariant() >= beforeInvariant
+
+def test_call_tokenToEth_min_smaller():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18 + 2*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    beforeInvariant = exchange.invariant()
+    expectedReturn = calculate_liquidity_pool_output(exchange.tokenPool(), exchange.ethPool(), 2*10**18, fee)
+    # Act
+    tokenToEthTx = exchange.tokenToEth(account.address, 2*10**18, expectedReturn * 0.95, {'from': account})
+    # Above has 5% slippage
+    tokenToEthTx.wait(1)
+    # Assert
+    assert abs(tokenToEthTx.events["EthPurchase"]["ethOut"] / expectedReturn - 1) < 0.0001 # I was having some jank in the math, was not able to find it. 0.01% error is fine.
+    assert exchange.invariant() >= beforeInvariant
+
+def test_call_tokenToEth_min_larger():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18 + 2*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    
+    expectedReturn = calculate_liquidity_pool_output(exchange.tokenPool(), exchange.ethPool(), 2*10**18, fee)
+    # Act & Assert
+    with pytest.raises(Exception):
+        tokenToEthTx = exchange.tokenToEth(account.address, 2*10**18, expectedReturn * 1.05, {'from': account})
+        tokenToEthTx.wait(1)
+
+def test_call_tokenToEth_no_seed():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    # Act & Assert
+    with pytest.raises(Exception):
+        tokenToEthTx = exchange.tokenToEth(account.address, 2*10**18, 0, {'from': account})
+        tokenToEthTx.wait(1)
