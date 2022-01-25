@@ -75,7 +75,7 @@ contract AstroSwapExchange {
         uint256 ethOut = (ethPool * shares) / totalShares;
         uint256 tokenOut = (tokenPool * shares) / totalShares;
         require(token.transferFrom(address(this), msg.sender, tokenOut));
-        require(msg.sender.transfer(ethOut));
+        payable(msg.sender).call{value:ethOut};
         ethPool -= ethOut;
         tokenPool -= tokenOut;
         invariant = ethPool * tokenPool;
@@ -84,19 +84,19 @@ contract AstroSwapExchange {
         emit Divestment(msg.sender, shares);
     }
 
-    function getEthToTokenQuote(uint256 ethValue) public view returns (uint256) {
+    function getEthToTokenQuote(uint256 ethValue) public view returns (uint256 tokenQuote) {
         uint256 fee = ethValue / feeAmmount;
         uint256 mockPool = ethPool + ethValue;
-        return tokensPaid = tokenPool - (invariant / (mockPool - fee) + 1);
+        return (tokenPool - (invariant / (mockPool - fee) + 1));
     }
 
-    function getTokenToEthQuote(uint256 tokenValue) public view returns (uint256) {
+    function getTokenToEthQuote(uint256 tokenValue) public view returns (uint256 ethQuote) {
         uint256 fee = tokenValue / feeAmmount;
         uint256 mockPool = tokenPool + tokenValue;
-        return ethPaid = ethPool - (invariant / (mockPool - fee) + 1);
+        return (ethPool - (invariant / (mockPool - fee) + 1));
     }
 
-    function ethToTokenPrivate(uint256 value) private returns(uint256 tokensPaid){
+    function ethToTokenPrivate(uint256 value) private returns(uint256 tokenToPay){
         uint256 fee = value / feeAmmount;
         ethPool = ethPool + value;
         uint256 tokensPaid = tokenPool - (invariant / (ethPool - fee) + 1); // k = x * y <==> y = k / x, we payout the difference
@@ -107,7 +107,7 @@ contract AstroSwapExchange {
         return tokensPaid;
     }
 
-    function tokenToEthPrivate(uint256 tokensIn) private returns(uint256 ethPaid){
+    function tokenToEthPrivate(uint256 tokensIn) private returns(uint256 ethToPay){
         uint256 fee = tokensIn / feeAmmount;
         tokenPool = tokenPool + tokensIn;
         uint256 ethPaid = ethPool - (invariant / (tokenPool - fee) + 1); // k = x * y <==> x = k / y, we payout the difference
