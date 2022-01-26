@@ -20,13 +20,17 @@ contract AstroSwapFactory {
         return exchangeToToken[exchange];
     }
 
+    function exchangeCount() public view returns (uint256 count) {
+        return tokensAvailable.length;
+    }
+
     function addTokenExchange(address tokenAddress) public {
         require(tokenToExchange[tokenAddress] == address(0), "Allready added");
         require(tokenAddress != address(0));
-        UniswapExchange exchange = new UniswapExchange(tokenAddress);
+        AstroSwapExchange exchange = new AstroSwapExchange(tokenAddress);
         tokensAvailable.push(tokenAddress);
         tokenToExchange[tokenAddress] = exchange;
         exchangeToToken[exchange] = tokenAddress;
-        TokenExchangeAdded(tokenExchange, tokenAddress);
+        TokenExchangeAdded(exchange, tokenAddress);
     }
 }
