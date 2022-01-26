@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 
 // 0.8.0 so no need for safeMath
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./AstroSwapFactory.sol";
 
 contract AstroSwapExchange {
     // The address of the factory that made us :)
