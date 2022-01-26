@@ -32,8 +32,8 @@ def deploy_exchage_contract(tokenAddress):
     print("AstroSwapExchage@", exchange)
     return exchange
 
-def get_exchange_info():
-    exchange = AstroSwapExchange[-1]
+def get_exchange_info(exchange = None):
+    if exchange == None: exchange = AstroSwapExchange[-1]
     print("Address:", exchange.address, "Token:", exchange.token() ,"Fee:", exchange.feeAmmount(), "ETH/ERC20:", exchange.ethPool(), "/", exchange.tokenPool(), "Invariant:", exchange.invariant())
 
 def seed_invest(eth, token):
