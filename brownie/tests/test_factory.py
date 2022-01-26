@@ -13,8 +13,8 @@ from random import randint
 # - Try add a token exchange that allready exists (should fail)
 # - Convert from token to exchange when the exchange is deployed
 # - Convert from exchange to token when the exchange is deployed
-# - Convert from token to exchange when the exchange is not deployed (should fail)
-# - Convert from exchange to token when the exchange is not deployed (should fail)
+# - Convert from token to exchange when the exchange is not deployed
+# - Convert from exchange to token when the exchange is not deployed 
 # - Deploy a random amount of exchanges, make sure the count is right
 # - Make sure count is correct for 0 exchanges
 
@@ -117,8 +117,7 @@ def test_factory_convert_token_to_exchange_no_exchange():
     )
     erc20 = deploy_erc20()
     # Act & Assert
-    with pytest.raises(Exception):
-        factory.convertTokenToExchange(erc20.address)
+    assert factory.convertTokenToExchange(erc20.address) == "0x0000000000000000000000000000000000000000"
 
 def test_factory_convert_exchange_to_token_no_exchange():
     # Arrange
@@ -130,8 +129,7 @@ def test_factory_convert_exchange_to_token_no_exchange():
     )
     erc20 = deploy_erc20()
     # Act & Assert
-    with pytest.raises(Exception):
-        factory.convertExchangeToToken(erc20.address)
+    assert factory.convertExchangeToToken(erc20.address) == "0x0000000000000000000000000000000000000000"
 
 def test_factory_count_random():
     # Arrange
@@ -147,7 +145,7 @@ def test_factory_count_random():
         erc20 = deploy_erc20()
         forgeTx = factory.addTokenExchange(erc20.address, {'from': account})
         forgeTx.wait(1)
-    count = factory.getExchangeCount()
+    count = factory.exchangeCount()
     # Assert
     assert count == value
 
@@ -160,6 +158,6 @@ def test_factory_count_zero():
         publish_source = config["networks"][network.show_active()].get("verify", False)
     )
     # Act
-    count = factory.getExchangeCount()
+    count = factory.exchangeCount()
     # Assert
     assert count == 0
