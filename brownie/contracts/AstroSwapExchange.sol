@@ -8,7 +8,7 @@ import "./AstroSwapFactory.sol";
 
 contract AstroSwapExchange {
     // The address of the factory that made us :)
-    address public factory;
+    AstroSwapFactory public factory;
 
     // The address of the token we are swapping
     IERC20 public token;
@@ -29,11 +29,13 @@ contract AstroSwapExchange {
 
     event TokenPurchase(address indexed user, address indexed recipient, uint256 ethIn, uint256 tokensOut);
     event EthPurchase(address indexed user, address indexed recipient, uint256 tokensIn, uint256 ethOut);
+    event TokenToTokenOut(address indexed user, address indexed recipient, address indexed tokenExchangeAddress, uint256 tokensIn, uint256 ethTransfer);
     event Investment(address indexed user, uint256 indexed sharesPurchased);
     event Divestment(address indexed user, uint256 indexed sharesBurned);
 
+
     constructor(IERC20 _token, uint256 _fee) {
-        factory = msg.sender;
+        factory = AstroSwapFactory(msg.sender);
         feeAmmount = _fee;
         token = _token;
     }
@@ -97,6 +99,12 @@ contract AstroSwapExchange {
         return (ethPool - (invariant / (mockPool - fee) + 1));
     }
 
+    function getTokenToTokenQuote(uint256 tokenValue, address tokenOutAddress) public view returns (uint256 tokenQuote) {
+        uint256 ethTransfer = getTokenToEthQuote(tokenValue);
+        AstroSwapExchange outExchange = AstroSwapExchange(factory.tokenToExchange(tokenOutAddress));
+        return outExchange.getEthToTokenQuote(ethTransfer);
+    }
+
     function ethToTokenPrivate(uint256 value) private returns(uint256 tokenToPay){
         uint256 fee = value / feeAmmount;
         ethPool = ethPool + value;
@@ -134,8 +142,12 @@ contract AstroSwapExchange {
         payable(recipient).call{value:ethPaid};
     }
 
-    // Implementing this function requires setting up the factory to call back to for the other token's trade contract
-    // function tokenToToken(address recipient, address tokenOutAddress, uint256 tokensIn, uint256 minTokensOut) public hasLiquidity{
-    //    // Todo
-    // }
+    function tokenToToken(address recipient, address tokenOutAddress, uint256 tokensIn, uint256 minTokensOut) public hasLiquidity{
+        require(token.transferFrom(msg.sender, address(this), tokensIn), "Tkn IN transfer fail");
+        uint256 ethTransfer = tokenToEthPrivate(tokensIn);
+        require(ethTransfer > 0, "Eth out is too small");
+        address tokenExchangeAddress = factory.tokenToExchange(tokenOutAddress);
+        AstroSwapExchange(tokenExchangeAddress).ethToToken{value: ethTransfer}(recipient, minTokensOut); // Call the outcontract with the value
+        emit TokenToTokenOut(msg.sender, recipient, tokenExchangeAddress, tokensIn, ethTransfer);
+    }
 }
