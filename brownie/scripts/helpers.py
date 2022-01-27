@@ -1,5 +1,4 @@
-from brownie import network, accounts, config, Contract
-from brownie.network import contract
+from brownie import network, accounts, config, Contract, MockERC20
 from math import floor
 
 LOCAL_BLOCKCHAIN_ENVIRONMENTS = ["development","ganache-local"]
@@ -27,3 +26,10 @@ def calculate_liquidity_pool_output(fromPool, toPool, amount, fee):
     paid = toPool - newToPool
     return paid
 
+def approve_transfer(tokenAddress, outputAddress, account, amount):
+    print("Approving to:", tokenAddress)
+    ercAbi = MockERC20.abi
+    erc20Contract = Contract.from_abi("ERC20", tokenAddress, ercAbi)
+    approveTx = erc20Contract.approve(outputAddress, amount, {'from': account})
+    approveTx.wait(1)
+    print("Approved transfer", approveTx.events)
