@@ -77,7 +77,7 @@ contract AstroSwapExchange {
         require(investorShares[msg.sender] >= shares, "Not enough shares to divest");
         uint256 ethOut = (ethPool * shares) / totalShares;
         uint256 tokenOut = (tokenPool * shares) / totalShares;
-        require(token.transferFrom(address(this), msg.sender, tokenOut));
+        require(token.transfer(msg.sender, tokenOut));
         payable(msg.sender).call{value:ethOut};
         ethPool -= ethOut;
         tokenPool -= tokenOut;
@@ -85,6 +85,10 @@ contract AstroSwapExchange {
         investorShares[msg.sender] -= shares;
         totalShares -= shares;
         emit Divestment(msg.sender, shares);
+    }
+
+    function getShares(address investor) public view returns (uint256) {
+        return investorShares[investor];
     }
 
     function getEthToTokenQuote(uint256 ethValue) public view returns (uint256 tokenQuote) {
@@ -127,19 +131,21 @@ contract AstroSwapExchange {
         return ethPaid;
     }
 
-    function ethToToken(address recipient, uint256 minTokensOut) public payable hasLiquidity{
+    function ethToToken(address recipient, uint256 minTokensOut) public payable hasLiquidity returns(uint256 tokensPaid){
         uint256 tokensPaid = ethToTokenPrivate(msg.value);
         require(tokensPaid >= minTokensOut, "tknsPaid < minTknsOut");
         emit TokenPurchase(msg.sender, recipient, msg.value, tokensPaid);
         require(token.transfer(recipient, tokensPaid), "Tkn OUT transfer fail");
+        return tokensPaid;
     }
 
-    function tokenToEth(address recipient, uint256 tokensIn, uint256 minEthOut) public hasLiquidity{
+    function tokenToEth(address recipient, uint256 tokensIn, uint256 minEthOut) public hasLiquidity returns(uint256 ethPaid){
         require(token.transferFrom(msg.sender, address(this), tokensIn), "Tkn IN transfer fail");
         uint256 ethPaid = tokenToEthPrivate(tokensIn);
         require(ethPaid >= minEthOut, "ethPaid < minEthOut");
         emit EthPurchase(msg.sender, recipient, tokensIn, ethPaid);
         payable(recipient).call{value:ethPaid};
+        return ethPaid;
     }
 
     function tokenToToken(address recipient, address tokenOutAddress, uint256 tokensIn, uint256 minTokensOut) public hasLiquidity{
@@ -147,7 +153,8 @@ contract AstroSwapExchange {
         uint256 ethTransfer = tokenToEthPrivate(tokensIn);
         require(ethTransfer > 0, "Eth out is too small");
         address tokenExchangeAddress = factory.tokenToExchange(tokenOutAddress);
-        AstroSwapExchange(tokenExchangeAddress).ethToToken{value: ethTransfer}(recipient, minTokensOut); // Call the outcontract with the value
+        uint256 tokensOut = AstroSwapExchange(tokenExchangeAddress).ethToToken{value: ethTransfer}(recipient, minTokensOut); // Call the outcontract with the value
+        require(tokensOut >= minTokensOut, "Output less than minTokensOut");
         emit TokenToTokenOut(msg.sender, recipient, tokenExchangeAddress, tokensIn, ethTransfer);
     }
 }
