@@ -1,6 +1,6 @@
 from scripts.helpers import smart_get_account, LOCAL_BLOCKCHAIN_ENVIRONMENTS, calculate_liquidity_pool_output
-from scripts.runAstroSwap import deploy_erc20 , get_exchange_info
-from brownie import network, accounts, config, AstroSwapExchange, MockERC20
+from scripts.runAstroSwap import deploy_erc20 , exchange_from_address
+from brownie import network, accounts, config, AstroSwapExchange, AstroSwapFactory
 import pytest
 from random import randint
 
@@ -29,9 +29,28 @@ from random import randint
 # - Try calling tokenToEth without seeding (should fail)
 # - Compare EthToTokenQuote to actual cost (3 different values)
 # - Compare TokenToEthQuote to actual cost (3 different values)
-# - Divest properly
+# - Divest everything properly
 # - Divest half as much as what was invested
-# - Divest more than was invested
+# - Divest more than was invested (should fail)
+
+# - Exchange tokenToToken properly
+# - Exchange tokenToToken with a min > expected (should fail)
+# - Exchange tokenToToken without seeding anything (should fail)
+# - Exchange tokenToToken while only seeding from contract (should fail)
+# - Exchange tokenToToken while only seeding to account (should fail)
+# - Compare tokenToTokenQuote to actual cost (3 different values + 1 random one)
+
+def setupExchange(factory, token1, token2, account):
+    exchangeForge1 = factory.addTokenExchange(token1.address, {'from': account})
+    exchangeForge1.wait(1)
+    exchangeAddress1 = exchangeForge1.events["TokenExchangeAdded"][0]["tokenExchange"]
+    exchange1 = exchange_from_address(exchangeAddress1)
+    exchangeForge2 = factory.addTokenExchange(token2.address, {'from': account})
+    exchangeForge2.wait(1)
+    exchangeAddress2 = exchangeForge2.events["TokenExchangeAdded"][0]["tokenExchange"]
+    exchange2 = exchange_from_address(exchangeAddress2)
+    return exchange1, exchange2
+
 
 
 fee = 400
@@ -576,3 +595,245 @@ def test_tokenToEth_quotes():
     tokenToEthTx.wait(1)
     # Assert
     assert abs(tokenToEthTx.events["EthPurchase"]["ethOut"] / quote - 1) == 0
+
+def test_divest_proprely():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    print("Seeding")
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    print("Divesting")
+    # Act
+    divestTx = exchange.divest(10000, {'from': account})
+    divestTx.wait(1)
+    # Assert
+    assert exchange.invariant() == 0
+    assert exchange.tokenPool() == 0
+    assert exchange.ethPool() == 0
+    assert exchange.invariant() == 0
+    assert exchange.getShares(account.address) == 0
+
+def test_divest_half():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    print("Seeding")
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    print("Divesting")
+    # Act
+    divestTx = exchange.divest(10000*0.5, {'from': account})
+    divestTx.wait(1)
+    # Assert
+    assert exchange.invariant() == 1*10**18*0.5 * 100*10**18*0.5
+    assert exchange.tokenPool() == 50*10**18
+    assert exchange.ethPool() == 0.5*10**18
+    assert exchange.getShares(account.address) == 10000 - 10000*0.5
+
+def test_divest_more_than_owned():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 100*10**18, {'from': account})
+    approveTx.wait(1)
+    print("Seeding")
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    print("Divesting")
+    # Act & Assert
+    with pytest.raises(Exception):
+        divestTx = exchange.divest(10000*2, {'from': account})
+        divestTx.wait(1)
+
+def test_call_tokenToToken():
+    # Arrange
+    token1 = deploy_erc20()
+    token2 = deploy_erc20()
+    account = smart_get_account(1)
+    factory = AstroSwapFactory.deploy(
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+    )
+    # Create the two exchanges
+    exchange1, exchange2 = setupExchange(factory, token1, token2, account)
+    # Seed the two exchanges
+    approve1Tx = token1.approve(exchange1.address, 100*10**18, {'from': account})
+    approve1Tx.wait(1)
+    approve2Tx = token2.approve(exchange2.address, 100*10**18, {'from': account})
+    approve2Tx.wait(1)
+    seed1Tx = exchange1.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed1Tx.wait(1)
+    seed2Tx = exchange2.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed2Tx.wait(1)
+    # Act
+    approve1Tx = token1.approve(exchange1.address, 0.1*10**18, {'from': account})
+    approve1Tx.wait(1)
+    tokenToTokenTx = exchange1.tokenToToken(account.address, token2.address, 0.1*10**18, 0, {'from': account})
+    tokenToTokenTx.wait(1)
+    # Assert
+    assert tokenToTokenTx.events["TokenToTokenOut"]["tokenExchangeAddress"] == exchange2.address
+    assert tokenToTokenTx.events["TokenToTokenOut"]["recipient"] == account.address
+    assert tokenToTokenTx.events["TokenToTokenOut"]["user"] == account.address
+    assert tokenToTokenTx.events["TokenToTokenOut"]["ethTransfer"] > 0
+    
+    assert tokenToTokenTx.events["TokenPurchase"]["user"] == exchange1.address
+    assert tokenToTokenTx.events["TokenPurchase"]["ethIn"] == tokenToTokenTx.events["TokenToTokenOut"]["ethTransfer"]
+    assert tokenToTokenTx.events["TokenPurchase"]["tokensOut"] > 0
+
+def test_call_tokenToToken_min_bigger():
+    # Arrange
+    token1 = deploy_erc20()
+    token2 = deploy_erc20()
+    account = smart_get_account(1)
+    factory = AstroSwapFactory.deploy(
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+    )
+    # Create the two exchanges
+    exchange1, exchange2 = setupExchange(factory, token1, token2, account)
+    # Seed the two exchanges
+    approve1Tx = token1.approve(exchange1.address, 100*10**18, {'from': account})
+    approve1Tx.wait(1)
+    approve2Tx = token2.approve(exchange2.address, 100*10**18, {'from': account})
+    approve2Tx.wait(1)
+    seed1Tx = exchange1.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed1Tx.wait(1)
+    seed2Tx = exchange2.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed2Tx.wait(1)
+    # Act & Assert
+    with pytest.raises(Exception):
+        approve1Tx = token1.approve(exchange1.address, 0.1*10**18, {'from': account})
+        approve1Tx.wait(1)
+        tokenToTokenTx = exchange1.tokenToToken(account.address, token2.address, 0.1*10**18, 100*10**18, {'from': account})
+        tokenToTokenTx.wait(1)
+
+def test_call_tokenToToken_seeded_only_from():
+    # Arrange
+    token1 = deploy_erc20()
+    token2 = deploy_erc20()
+    account = smart_get_account(1)
+    factory = AstroSwapFactory.deploy(
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+    )
+    # Create the two exchanges
+    exchange1, exchange2 = setupExchange(factory, token1, token2, account)
+    # Seed the two exchanges
+    approve1Tx = token1.approve(exchange1.address, 100*10**18, {'from': account})
+    approve1Tx.wait(1)
+    seed1Tx = exchange1.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed1Tx.wait(1)
+    # Act & Assert
+    with pytest.raises(Exception):
+        approve1Tx = token1.approve(exchange1.address, 0.1*10**18, {'from': account})
+        approve1Tx.wait(1)
+        tokenToTokenTx = exchange1.tokenToToken(account.address, token2.address, 0.1*10**18, 0, {'from': account})
+        tokenToTokenTx.wait(1)
+
+def test_call_tokenToToken_seeded_only_to():
+    # Arrange
+    token1 = deploy_erc20()
+    token2 = deploy_erc20()
+    account = smart_get_account(1)
+    factory = AstroSwapFactory.deploy(
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+    )
+    # Create the two exchanges
+    exchange1, exchange2 = setupExchange(factory, token1, token2, account)
+    # Seed the two exchanges
+    approve2Tx = token2.approve(exchange2.address, 100*10**18, {'from': account})
+    approve2Tx.wait(1)
+    seed2Tx = exchange2.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed2Tx.wait(1)
+    # Act & Assert
+    with pytest.raises(Exception):
+        approve2Tx = token2.approve(exchange2.address, 0.1*10**18, {'from': account})
+        approve2Tx.wait(1)
+        tokenToTokenTx = exchange2.tokenToToken(account.address, token1.address, 0.1*10**18, 0, {'from': account})
+        tokenToTokenTx.wait(1)
+
+def test_tokenToToken_quotes():
+    # Arrange
+    token1 = deploy_erc20()
+    token2 = deploy_erc20()
+    account = smart_get_account(1)
+    factory = AstroSwapFactory.deploy(
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+    )
+    # Create the two exchanges
+    exchange1, exchange2 = setupExchange(factory, token1, token2, account)
+    # Seed the two exchanges
+    approve1Tx = token1.approve(exchange1.address, 100*10**18, {'from': account})
+    approve1Tx.wait(1)
+    seed1Tx = exchange1.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed1Tx.wait(1)
+    approve2Tx = token2.approve(exchange2.address, 100*10**18, {'from': account})
+    approve2Tx.wait(1)
+    seed2Tx = exchange2.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seed2Tx.wait(1)
+    # Act
+    tokenOutQuote = exchange1.getTokenToTokenQuote(0.1*10**18, token2.address, {'from': account})
+    approve1Tx = token1.approve(exchange1.address, 0.1*10**18, {'from': account})
+    approve1Tx.wait(1)
+    tokenToTokenTx = exchange1.tokenToToken(account.address, token2.address, 0.1*10**18, 0, {'from': account})
+    tokenToTokenTx.wait(1)
+    # Assert
+    assert tokenToTokenTx.events["TokenPurchase"]["tokensOut"] == tokenOutQuote
+
+    # And again!
+    tokenOutQuote2 = exchange2.getTokenToTokenQuote(11*10**18, token1.address, {'from': account})
+    approve2Tx = token2.approve(exchange2.address, 11*10**18, {'from': account})
+    approve2Tx.wait(1)
+    tokenToTokenTx2 = exchange2.tokenToToken(account.address, token1.address, 11*10**18, 0, {'from': account})
+    tokenToTokenTx2.wait(1)
+    # Assert
+    assert tokenToTokenTx2.events["TokenPurchase"]["tokensOut"] == tokenOutQuote2
+
+    # And again!
+    tokenOutQuote3 = exchange1.getTokenToTokenQuote(0.12345*10**18, token2.address, {'from': account})
+    approve1Tx = token1.approve(exchange1.address, 0.12345*10**18, {'from': account})
+    approve1Tx.wait(1)
+    tokenToTokenTx3 = exchange1.tokenToToken(account.address, token2.address, 0.12345*10**18, 0, {'from': account})
+    tokenToTokenTx3.wait(1)
+    # Assert
+    assert tokenToTokenTx3.events["TokenPurchase"]["tokensOut"] == tokenOutQuote3
+
+    # And again! (Random this time ;)
+    randomTokens = randint(0, 20*10**18)
+    tokenOutQuote4 = exchange1.getTokenToTokenQuote(randomTokens, token2.address, {'from': account})
+    approve1Tx = token1.approve(exchange1.address, randomTokens, {'from': account})
+    approve1Tx.wait(1)
+    tokenToTokenTx4 = exchange1.tokenToToken(account.address, token2.address, randomTokens, 0, {'from': account})
+    tokenToTokenTx4.wait(1)
+    # Assert
+    assert tokenToTokenTx4.events["TokenPurchase"]["tokensOut"] == tokenOutQuote4
