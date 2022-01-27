@@ -1,10 +1,15 @@
 from scripts.helpers import smart_get_account, LOCAL_BLOCKCHAIN_ENVIRONMENTS
 from brownie import network, accounts, config, AstroSwapExchange, MockERC20
+from brownie.network.contract import Contract
 
 fee = 400
 
 tokenCounter = 0
 tokens = []
+
+def exchange_from_address(address):
+    exchangeAbi = AstroSwapExchange.abi
+    return Contract.from_abi("AstroSwapExchange", address, exchangeAbi)
 
 def deploy_erc20():
     global tokenCounter
@@ -36,8 +41,8 @@ def get_exchange_info(exchange = None):
     if exchange == None: exchange = AstroSwapExchange[-1]
     print("Address:", exchange.address, "Token:", exchange.token() ,"Fee:", exchange.feeAmmount(), "ETH/ERC20:", exchange.ethPool(), "/", exchange.tokenPool(), "Invariant:", exchange.invariant())
 
-def seed_invest(eth, token):
-    exchange = AstroSwapExchange[-1]
+def seed_invest(eth, token, exchange = None):
+    if exchange == None: exchange = AstroSwapExchange[-1]
     account = smart_get_account(1)
     # Allow the contract to transfer 100 of our tokens
     approveTx = tokens[0].approve(exchange.address, token, {'from': account})
