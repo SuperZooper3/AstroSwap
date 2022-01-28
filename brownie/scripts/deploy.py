@@ -1,5 +1,5 @@
 from scripts.helpers import smart_get_account
-from brownie import network, AstroSwapFactory
+from brownie import network, AstroSwapFactory, config
 
 def deploy_factory(feeRate):
     account = smart_get_account(1)
@@ -9,5 +9,4 @@ def deploy_factory(feeRate):
 
 def main():
     feeRate = input("Fee rate denominator. EX: 400 is 0.25%: ")
-    assert(feeRate > 1, "Fee rate must be greater than 1 (100% fees)")
-    deploy_factory(feeRate)
+    deploy_factory(int(feeRate))
