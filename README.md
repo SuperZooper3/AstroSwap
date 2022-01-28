@@ -93,10 +93,45 @@ These are a bunch of functions to get information about the prices of trades, am
 - `event Divestment(address indexed user, uint256 indexed sharesBurned, uint256 ethDivested, uint256 tokensDivested)`
 
 ### Gas price benchmarks:
--  constructor      -  avg: 1237526  avg (confirmed): 1237526  low: 1237515  high: 1237527
+- constructor      -  avg: 1237526  avg (confirmed): 1237526  low: 1237515  high: 1237527
 - seedInvest       -  avg:  148157  avg (confirmed):  158386  low:   22426  high:  164268
 - invest           -  avg:   67089  avg (confirmed):   69591  low:   23453  high:   82157
 - tokenToEth       -  avg:   61853  avg (confirmed):   65024  low:   22964  high:   71017
 - ethToToken       -  avg:   57754  avg (confirmed):   62588  low:   22858  high:   62667
 - divest           -  avg:   49329  avg (confirmed):   56030  low:   22527  high:   74707
 
+## Factory details:
+The factory is used to create new exchanges that are garunteed to be the exact AstroSwapExchange. It also facilitates finding the exchange linked to a token and vice versa.
+
+### How it works:
+- Anyone can send a transaction to `addTokenExchange` with the address of the token they want to be traded.
+- The factory then creates a new exchange and emits a event with the address of the new exchange. This exchange is also added to the two way mapping of tokens to exchanges.
+- When someone has an exchange and wants to find the token, they can use `convertExchangeToToken` to get the token being traded. If you have a token and want to find the exchange, use `convertTokenToExchange`. These functions will return the 0x0 address if there is no exchange for that token or if that is not a valid exchange.
+
+### Variables
+- `uint256 public feeRate`: The fee rate that will be given to all contracts that are created by the factory.
+- `uint256 public exchangeCount`: The number of exchanges that have been created by the factory.
+- `mapping(address => address) public tokenToExchange` + `mapping(address => address) public exchangeToToken`: Two one-way mappings of tokens to exchanges and exchanges to tokens, creating a two way mapping.
+
+### Functions 
+- `addTokenExchange(address tokenAddress) public`: Takes in a token address and creates an exchange for it, adding it to the mapping. Emits a `TokenExchangeAdded` event
+- `convertTokenToExchange(address token) public view returns (address exchange)`: Takes in a token and returns the exchange that is trades it.
+- `convertExchangeToToken(address exchange) public view returns (address token)`: Takes in an exchange and returns the token that is traded in that exchange.
+
+### Events
+- `TokenExchangeAdded(address indexed tokenExchange, address indexed tokenAddress)`: Emitted when a new exchange is created throught the factory. 
+  - `tokenExchange`: The address of the new exchange
+  - `tokenAddress`: The address of the token being traded
+
+## Brownie Setup
+- Install all the dependencies in requirements.txt using `pip install -r requirements.txt` (preferably using a virtual environment)
+- Add a .env file to /brownie with in it:
+  - An infura key for easy network access in `WEB3_INFURA_PROJECT_ID` 
+  - An etherscan API tokoen for contract verification in `ETHERSCAN_TOKEN`
+- `cd brownie` && `brownie compile` to compile the smart contract
+- Use `brownie test` to test the smart contracts.
+- Use `brownie run scripts\deploy.py` to deploy the smart contract to a local network. (Add the --network NETWORKNAME flag to deploy it to a real network).
+
+## Warnings
+This contract has not been audited and I do not expect it to be perfect. It has been tested extensively and is working as intended on a local machine and on the Rinkeby Testnet but might not work on other networks.
+It comes as is with no warranty and is not intended for use in production.
