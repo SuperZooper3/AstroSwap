@@ -12,11 +12,11 @@ contract AstroSwapFactory {
     mapping(address => address) public tokenToExchange;
     mapping(address => address) public exchangeToToken;
 
+    event TokenExchangeAdded(address indexed tokenExchange, address indexed tokenAddress);
+
     constructor(uint256 _fee) {
         feeRate = _fee;
     }
-
-    event TokenExchangeAdded(address indexed tokenExchange, address indexed tokenAddress);
 
     function convertTokenToExchange(address token) public view returns (address exchange) {
         return tokenToExchange[token];
