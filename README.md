@@ -39,6 +39,8 @@ Order of events:
 
 A part of the liquidity grows and growns, the price of buying the other will increase (supply & demand).
 
+Since solidity dose not have floats, things are allways so the exchange keeps more to avoid leaking liquidity.
+
 ### Investment
 For each pool to work, it needs investments of both units being traded. This type of liquidity demands that when investments are put in, they have equal value. So if 1 token costs 1 wei, then you would invest equal amounts. But if on the other hand, 1 token cost 5 wei, you would invest 5 wei for each token put in.
 
