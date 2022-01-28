@@ -30,8 +30,8 @@ contract AstroSwapExchange {
     event TokenPurchase(address indexed user, address indexed recipient, uint256 ethIn, uint256 tokensOut);
     event EthPurchase(address indexed user, address indexed recipient, uint256 tokensIn, uint256 ethOut);
     event TokenToTokenOut(address indexed user, address indexed recipient, address indexed tokenExchangeAddress, uint256 tokensIn, uint256 ethTransfer);
-    event Investment(address indexed user, uint256 indexed sharesPurchased);
-    event Divestment(address indexed user, uint256 indexed sharesBurned);
+    event Investment(address indexed user, uint256 indexed sharesPurchased, uint256 ethInvested, uint256 tokensInvested);
+    event Divestment(address indexed user, uint256 indexed sharesBurned, uint256 ethDivested, uint256 tokensDivested);
 
 
     constructor(IERC20 _token, uint256 _fee) {
@@ -55,12 +55,12 @@ contract AstroSwapExchange {
         // Give the starting investor 10000 shares
         investorShares[msg.sender] = 10000;
         totalShares = 10000;
-        emit Investment(msg.sender, 10000);
+        emit Investment(msg.sender, 10000, msg.value, tokenInvestment);
     }
 
     function invest(uint256 maxTokensInvested) public payable{
         // Amount of tokens to invest is bassed of of the current ratio of eth to token in the pools
-        uint256 tokenInvestment = (tokenPool / ethPool) * msg.value;
+        uint256 tokenInvestment = (tokenPool * msg.value / ethPool);
         require(maxTokensInvested >= tokenInvestment, "Max < required investment");
         require (token.transferFrom(msg.sender, address(this), tokenInvestment));
         uint256 sharesPurchased = (tokenInvestment * totalShares)/ tokenPool;
@@ -70,7 +70,15 @@ contract AstroSwapExchange {
         // Give the investor their shares
         investorShares[msg.sender] += sharesPurchased;
         totalShares += sharesPurchased;
-        emit Investment(msg.sender, sharesPurchased);
+        emit Investment(msg.sender, sharesPurchased, msg.value, tokenInvestment);
+    }
+
+    function investQuoteFromEth(uint256 ethPaid) public view returns (uint256 tokensRequired) {
+        return (tokenPool * ethPaid / ethPool);
+    }
+
+    function investQuoteFromTokens(uint256 tokensPaid) public view returns (uint256 ethRequired) {
+        return (ethPool * tokensPaid / tokenPool);
     }
 
     function divest(uint256 shares) public {
@@ -84,7 +92,7 @@ contract AstroSwapExchange {
         invariant = ethPool * tokenPool;
         investorShares[msg.sender] -= shares;
         totalShares -= shares;
-        emit Divestment(msg.sender, shares);
+        emit Divestment(msg.sender, shares, ethOut, tokenOut);
     }
 
     function getShares(address investor) public view returns (uint256) {
