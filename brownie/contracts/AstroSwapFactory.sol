@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // Almost directly taken from https://github.com/Uniswap/old-solidity-contracts/blob/master/contracts/Exchange/UniswapFactory.sol
 contract AstroSwapFactory {
     uint256 public feeRate;
-    address[] public tokensAvailable;
+    uint256 public exchangeCount;
     mapping(address => address) public tokenToExchange;
     mapping(address => address) public exchangeToToken;
 
@@ -26,15 +26,11 @@ contract AstroSwapFactory {
         return exchangeToToken[exchange];
     }
 
-    function exchangeCount() public view returns (uint256 count) {
-        return tokensAvailable.length;
-    }
-
     function addTokenExchange(address tokenAddress) public {
         require(tokenToExchange[tokenAddress] == address(0), "Allready added");
         require(tokenAddress != address(0));
         AstroSwapExchange exchange = new AstroSwapExchange(IERC20(tokenAddress), feeRate);
-        tokensAvailable.push(tokenAddress);
+        exchangeCount++;
         tokenToExchange[tokenAddress] = address(exchange);
         exchangeToToken[address(exchange)] = tokenAddress;
         emit TokenExchangeAdded(address(exchange), tokenAddress);
