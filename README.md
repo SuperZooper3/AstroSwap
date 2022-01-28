@@ -128,9 +128,9 @@ The factory is used to create new exchanges that are garunteed to be the exact A
 - Add a .env file to /brownie with in it:
   - An infura key for easy network access in `WEB3_INFURA_PROJECT_ID` 
   - An etherscan API tokoen for contract verification in `ETHERSCAN_TOKEN`
-- `cd brownie` && `brownie compile` to compile the smart contract
+- `cd brownie` && `brownie compile` to compile the smart contracts.
 - Use `brownie test` to test the smart contracts.
-- Use `brownie run scripts\deploy.py` to deploy the smart contract to a local network. (Add the --network NETWORKNAME flag to deploy it to a real network).
+- Use `brownie run scripts\deploy.py` to deploy the factory to a local network. (Add the --network NETWORKNAME flag to deploy it to a real network).
 
 ## Warnings
 This contract has not been audited and I do not expect it to be perfect. It has been tested extensively and is working as intended on a local machine and on the Rinkeby Testnet but might not work on other networks.
