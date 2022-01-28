@@ -3,6 +3,7 @@ from math import floor
 
 LOCAL_BLOCKCHAIN_ENVIRONMENTS = ["development","ganache-local"]
 FORKED = ["mainnet-fork","mainnet-fork-dev"]
+realAccountNames = []
 
 def get_account(index = 0, id = None): # Automaticaly gets a good account
     if id != None:
@@ -15,6 +16,7 @@ def smart_get_account(index):
     if network.show_active() in LOCAL_BLOCKCHAIN_ENVIRONMENTS:
         return accounts[index]
     return accounts.load("test"+str(index))
+    return accounts.load(realAccountNames[index])
     
 def calculate_liquidity_pool_output(fromPool, toPool, amount, fee):
     invariant = fromPool * toPool

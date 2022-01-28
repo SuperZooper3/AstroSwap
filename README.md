@@ -132,6 +132,9 @@ The factory is used to create new exchanges that are garunteed to be the exact A
 - Use `brownie test` to test the smart contracts.
 - Use `brownie run scripts\deploy.py` to deploy the factory to a local network. (Add the --network NETWORKNAME flag to deploy it to a real network).
 
+### Brownie expectations:
+This project expects you to have accounts added to your brownie install. I have a bunch of test accounts and my naming convention for them is `test1, test2, test3...`. This is used in `smart_get_account` in helpers.py to get me accounts depending on if I am on a local network or a real network. If you want to use your own accounts with a differnt naming convention, comment out `return accounts.load("test"+str(index))` and add your account names to the `realAccountNames` list in `deploy.py` (the way this project is structured, I dose not store the accounts and asks for them over and over again so I really recommend using accounts without a password or you will be stuck typing it in a million times).
+
 ## Warnings
 This contract has not been audited and I do not expect it to be perfect. It has been tested extensively and is working as intended on a local machine and on the Rinkeby Testnet but might not work on other networks.
 It comes as is with no warranty and is not intended for use in production.
