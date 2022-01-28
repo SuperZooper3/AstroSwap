@@ -32,13 +32,14 @@ from random import randint
 # - Divest everything properly
 # - Divest half as much as what was invested
 # - Divest more than was invested (should fail)
-
 # - Exchange tokenToToken properly
 # - Exchange tokenToToken with a min > expected (should fail)
 # - Exchange tokenToToken without seeding anything (should fail)
 # - Exchange tokenToToken while only seeding from contract (should fail)
 # - Exchange tokenToToken while only seeding to account (should fail)
 # - Compare tokenToTokenQuote to actual cost (3 different values + 1 random one)
+# - Compare investQuoteFromEth to actual cost (3 different values)
+# - Compare investQuoteFromToken to actual cost (3 different values)
 
 def setupExchange(factory, token1, token2, account):
     exchangeForge1 = factory.addTokenExchange(token1.address, {'from': account})
@@ -837,3 +838,89 @@ def test_tokenToToken_quotes():
     tokenToTokenTx4.wait(1)
     # Assert
     assert tokenToTokenTx4.events["TokenPurchase"]["tokensOut"] == tokenOutQuote4
+
+
+def test_investQuoteFromEth():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 1000*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    # Act
+    quote = exchange.investQuoteFromEth(1*10**18)
+    investTx = exchange.invest(10**22, {'from': account, 'value': 1*10**18})
+    investTx.wait(1)
+    # Assert
+    assert investTx.events["Investment"]["tokensInvested"] == quote
+
+    # And again!
+    quote2 = exchange.investQuoteFromEth(0.23*10**18)
+    investTx2 = exchange.invest(10**22, {'from': account, 'value': 0.23*10**18})
+    investTx2.wait(1)
+    # Assert
+    assert investTx2.events["Investment"]["tokensInvested"] == quote2
+
+    # And again!
+    quote3 = exchange.investQuoteFromEth(0.12345*10**18)
+    investTx3 = exchange.invest(10**22, {'from': account, 'value': 0.12345*10**18})
+    investTx3.wait(1)
+    # Assert
+    assert investTx3.events["Investment"]["tokensInvested"] == quote3
+
+    # And again! (Zero)
+    quote4 = exchange.investQuoteFromEth(0)
+    investTx4 = exchange.invest(10**22, {'from': account, 'value': 0})
+    investTx4.wait(1)
+    # Assert
+    assert investTx4.events["Investment"]["tokensInvested"] == quote4
+
+def test_investQuoteFromToken():
+    # Arrange
+    token = deploy_erc20()
+    account = smart_get_account(1)
+    exchange = AstroSwapExchange.deploy(
+        token.address,
+        fee,
+        {'from': account},
+        publish_source = config["networks"][network.show_active()].get("verify", False)
+        )
+    approveTx = token.approve(exchange.address, 1000*10**18, {'from': account})
+    approveTx.wait(1)
+    seedTx = exchange.seedInvest(100*10**18, {'from': account, 'value': 1*10**18})
+    seedTx.wait(1)
+    # Act
+    quote = exchange.investQuoteFromTokens(6*10**18)
+    print(quote)
+    investTx = exchange.invest(10**22, {'from': account, 'value': quote})
+    investTx.wait(1)
+    # Assert
+    assert investTx.events["Investment"]["tokensInvested"] == 6*10**18
+
+    # And again!
+    quote2 = exchange.investQuoteFromTokens(0.23*10**18)
+    investTx2 = exchange.invest(10**22, {'from': account, 'value': quote2})
+    investTx2.wait(1)
+    # Assert
+    assert investTx2.events["Investment"]["tokensInvested"] == 0.23*10**18
+
+    # And again!
+    quote3 = exchange.investQuoteFromTokens(0.12345*10**18)
+    investTx3 = exchange.invest(10**22, {'from': account, 'value': quote3})
+    investTx3.wait(1)
+    # Assert
+    assert investTx3.events["Investment"]["tokensInvested"] == 0.12345*10**18
+
+    # And again! (Zero)
+    quote4 = exchange.investQuoteFromTokens(0)
+    investTx4 = exchange.invest(10**22, {'from': account, 'value': quote4})
+    investTx4.wait(1)
+    # Assert
+    assert investTx4.events["Investment"]["tokensInvested"] == 0
