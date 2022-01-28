@@ -33,7 +33,6 @@ contract AstroSwapExchange {
     event Investment(address indexed user, uint256 indexed sharesPurchased, uint256 ethInvested, uint256 tokensInvested);
     event Divestment(address indexed user, uint256 indexed sharesBurned, uint256 ethDivested, uint256 tokensDivested);
 
-
     constructor(IERC20 _token, uint256 _fee) {
         factory = AstroSwapFactory(msg.sender);
         feeAmmount = _fee;
@@ -95,7 +94,7 @@ contract AstroSwapExchange {
         emit Divestment(msg.sender, shares, ethOut, tokenOut);
     }
 
-    function getShares(address investor) public view returns (uint256) {
+    function getShares(address investor) public view returns (uint256 shareCount) {
         return investorShares[investor];
     }
 
