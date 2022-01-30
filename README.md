@@ -1,6 +1,8 @@
 # AstroSwap
 A Uniswap Clone (bassed off V1)
 
+![AstroSwap Logo](AstroSwapLogoV1_64x.png)
+
 ## Concept Source
 https://hackmd.io/@HaydenAdams/HJ9jLsfTz
 
