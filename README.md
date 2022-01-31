@@ -9,6 +9,8 @@ https://hackmd.io/@HaydenAdams/HJ9jLsfTz
 ## Description
 This is a two part token exchange system. The first part of it is an exchange contract that allows people to exchange tokens for ether and vice vera. The second part of it is a contract factory that spawns these exchanges and allows users to transfer tokens for tokens directly.
 
+The logic behind spliting each exhcange into it's own contract is that it makes individual trades cheaper even if the initial setup of an exchange is quite expensive. If an exchange had a goal to be smaller, it might make sense to run all exchanges through one master contract.
+
 ## Exchange Details
 Contract: `AstroSwapExchange`
 
